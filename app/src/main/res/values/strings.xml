@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">FSS CUSTOMER APPLICATION</string>
+    <string name="login_to_fss_customer">Login to FSS Customer</string>
+    <string name="enter_email_id_mobile">Enter Email Id / Mobile</string>
+    <string name="password">Password</string>
+    <string name="login">Login</string>
+    <string name="forgot_password">Forgot Password?</string>
+    <string name="or">or</string>
+    <string name="welcome_to">Welcome to</string>
+    <string name="login_subtitle">Login to manage your business smarter &amp; faster</string>
+    <string name="email_address">Email address</string>
+    <string name="dont_have_account_signup">Don\'t have an account? Sign Up</string>
+    <string name="secure_reliable_footer">Secure. Reliable. Trusted by thousands of businesses.</string>
+    <string name="tally_solutions_tagline">Tally Solutions | Web &amp; App Development</string>
+</resources>
