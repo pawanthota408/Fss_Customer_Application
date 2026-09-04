@@ -189,9 +189,7 @@ fun DashboardContent(
     val allItems = (data.products ?: emptyList()) + (data.services ?: emptyList())
     val productsCatalog = allItems.filter {
         val name = it.displayName().lowercase()
-        val cat = it.category.orEmpty().lowercase()
-        cat.contains("product") || name.contains("tally") ||
-                name.contains("gold") || name.contains("silver") || name.contains("erp")
+        name.contains("gold") || name.contains("silver") || name.contains("server")
     }
     val servicesCatalog = allItems.filter { service -> productsCatalog.none { (it.id == service.id) && (it.displayName() == service.displayName()) } }
 

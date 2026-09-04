@@ -140,7 +140,13 @@ import com.fsscustomerapplication.data.remote.model.Tdl
                         item?.let { nonNullItem ->
                             val prunedItem = nonNullItem.copy(services = emptyList(), addons = emptyList())
                             val encodedItem = URLEncoder.encode(Gson().toJson(prunedItem), StandardCharsets.UTF_8.toString())
-                            if (nonNullItem.category == "Product") {
+                            val isProduct = nonNullItem.category.equals("Product", ignoreCase = true) ||
+                                nonNullItem.displayName().contains("Gold", ignoreCase = true) ||
+                                nonNullItem.displayName().contains("Silver", ignoreCase = true) ||
+                                nonNullItem.displayName().contains("Server", ignoreCase = true) ||
+                                nonNullItem.displayName().contains("Cloud", ignoreCase = true) ||
+                                nonNullItem.displayName().contains("Tally Prime", ignoreCase = true)
+                            if (isProduct) {
                                 navController.navigate("product_request/$encodedItem")
                             } else {
                                 navController.navigate("service_request/$encodedItem")
@@ -195,6 +201,19 @@ import com.fsscustomerapplication.data.remote.model.Tdl
                     userId = userId,
                     item = null,
                     tdlName = tdlName,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable("product_request/{itemJson}") { backStackEntry ->
+                val itemJson = backStackEntry.arguments?.getString("itemJson") ?: ""
+                val item = if (itemJson.isNotEmpty()) {
+                    val decodedJson = URLDecoder.decode(itemJson, StandardCharsets.UTF_8.toString())
+                    Gson().fromJson(decodedJson, ProductService::class.java)
+                } else null
+                val userId = sessionManager.getUserId()
+                ProductRequestScreen(
+                    userId = userId,
+                    item = item,
                     onBack = { navController.popBackStack() }
                 )
             }

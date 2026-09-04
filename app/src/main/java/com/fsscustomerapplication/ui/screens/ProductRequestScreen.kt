@@ -1,5 +1,6 @@
 package com.fsscustomerapplication.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import coil.compose.AsyncImage
 import com.fsscustomerapplication.R
@@ -49,9 +51,22 @@ fun ProductRequestScreen(
     var numUsers by remember { mutableStateOf("") }
     var numBranches by remember { mutableStateOf("10") }
     var serviceRequired by remember { mutableStateOf("Yes") }
-    var selectedProduct by remember { mutableStateOf(item?.name ?: "Tally Prime Gold") }
+
+    fun normalizeProductName(rawName: String?): String {
+        val n = rawName.orEmpty().lowercase()
+        return when {
+            n.contains("silver") -> "Tally Prime Silver"
+            n.contains("gold") -> "Tally Prime Gold"
+            n.contains("server") -> "Tally Prime Server"
+            else -> "Tally Prime Gold"
+        }
+    }
+
+    val initialProduct = normalizeProductName(item?.displayName())
+    var selectedProduct by remember { mutableStateOf(initialProduct) }
     var requestType by remember { mutableStateOf("New License") }
     var selectedLicense by remember { mutableStateOf("") }
+    var upgradeTargetProduct by remember { mutableStateOf("Tally Prime Server") }
 
     LaunchedEffect(userId) {
         viewModel.fetchDashboardData(userId)
@@ -60,44 +75,43 @@ fun ProductRequestScreen(
     val licences = (uiState as? DashboardState.Success)?.data?.licences ?: emptyList()
     val customer = (uiState as? DashboardState.Success)?.data?.customer
 
-    // Logic for available products based on current license (Upgrade Path)
-    val allProducts = listOf("Tally Prime Silver", "Tally Prime Gold", "Tally Prime Server", "Tally Cloud")
-    val availableProducts = remember(selectedLicense, requestType, licences) {
-        if ((requestType == "Upgrade") && selectedLicense.isNotEmpty()) {
-            val currentProduct = licences.find { it.number == selectedLicense }?.productName ?: ""
+    val allProducts = listOf("Tally Prime Silver", "Tally Prime Gold", "Tally Prime Server")
+    
+    // Upgrade available products based on the opened product (selectedProduct)
+    val availableProducts = remember(selectedProduct, requestType) {
+        if (requestType == "Upgrade") {
             when {
-                currentProduct.contains("Silver", ignoreCase = true) -> 
-                    listOf("Tally Prime Gold", "Tally Prime Server", "Tally Cloud")
-                currentProduct.contains("Gold", ignoreCase = true) -> 
-                    listOf("Tally Prime Server", "Tally Cloud")
-                currentProduct.contains("Server", ignoreCase = true) -> 
-                    listOf("Tally Cloud")
-                else -> allProducts
+                selectedProduct.contains("Silver", ignoreCase = true) ->
+                    listOf("Tally Prime Gold", "Tally Prime Server")
+                selectedProduct.contains("Gold", ignoreCase = true) ->
+                    listOf("Tally Prime Server")
+                selectedProduct.contains("Server", ignoreCase = true) ->
+                    emptyList()
+                else -> listOf("Tally Prime Gold", "Tally Prime Server")
             }
         } else {
             allProducts
         }
     }
 
-    // Reset selected product if it's no longer available in the upgrade path
     LaunchedEffect(availableProducts) {
-        if (!availableProducts.contains(selectedProduct)) {
-            selectedProduct = availableProducts.firstOrNull() ?: "Tally Prime Gold"
+        if (availableProducts.isNotEmpty() && !availableProducts.contains(upgradeTargetProduct)) {
+            upgradeTargetProduct = availableProducts.first()
         }
     }
 
     var callMethod by remember { mutableStateOf(value = false) }
     var whatsappMethod by remember { mutableStateOf(value = false) }
 
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
 
     LaunchedEffect(submitState) {
         if (submitState is TicketSubmitState.Success) {
-            android.widget.Toast.makeText(context, (submitState as TicketSubmitState.Success).message, android.widget.Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, (submitState as TicketSubmitState.Success).message, Toast.LENGTH_SHORT).show()
             viewModel.resetTicketSubmitState()
             onBack()
         } else if (submitState is TicketSubmitState.Error) {
-            android.widget.Toast.makeText(context, (submitState as TicketSubmitState.Error).message, android.widget.Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, (submitState as TicketSubmitState.Error).message, Toast.LENGTH_SHORT).show()
             viewModel.resetTicketSubmitState()
         }
     }
@@ -142,7 +156,7 @@ fun ProductRequestScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Product Header
+            // Product Header (Always displays selectedProduct)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -158,18 +172,22 @@ fun ProductRequestScreen(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text(selectedProduct, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text(if (requestType == "Upgrade" && availableProducts.isEmpty()) "Tally Prime Server" else selectedProduct, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Text("100% Secure & Official License", fontSize = 10.sp, color = Color(0xFF138808))
                         Text("Selected product for your business", fontSize = 10.sp, color = Color.Gray)
                     }
                 }
             }
 
+            // Request Type
             SectionTitle("Request Type")
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilterChip(
                     selected = requestType == "New License",
-                    onClick = { requestType = "New License" },
+                    onClick = { 
+                        requestType = "New License"
+                        selectedLicense = ""
+                    },
                     label = { Text("New License") }
                 )
                 if (licences.isNotEmpty()) {
@@ -181,9 +199,41 @@ fun ProductRequestScreen(
                 }
             }
 
+            // Select License to Upgrade (Choose License) - Placed at the top right below Request Type when Upgrade
             if (requestType == "Upgrade") {
-                LabelText("Select License to Upgrade *")
-                LicenseDropdown(licences, selectedLicense) { selectedLicense = it }
+                SectionTitle("Select License to Upgrade")
+                val tallyLicences = licences.filter { lic ->
+                    val pName = lic.productName.orEmpty().lowercase()
+                    pName.contains("tally") || pName.contains("silver") || pName.contains("gold") || pName.contains("server")
+                }
+                LicenseDropdown(tallyLicences, selectedLicense, showProduct = false) { 
+                    selectedLicense = it 
+                }
+            }
+
+            // Products dropdown (or highest tier message)
+            if (requestType == "New License" || (requestType == "Upgrade" && availableProducts.isNotEmpty())) {
+                LabelText("Products *")
+                SimpleDropdown(
+                    options = if (requestType == "Upgrade") availableProducts else allProducts,
+                    selected = if (requestType == "Upgrade") upgradeTargetProduct else selectedProduct,
+                    onSelect = { 
+                        if (requestType == "Upgrade") upgradeTargetProduct = it 
+                        else selectedProduct = it 
+                    }
+                )
+            } else if (availableProducts.isEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD))
+                ) {
+                    Text(
+                        text = "Tally Prime Server is already the highest tier license available. No higher upgrades possible.",
+                        modifier = Modifier.padding(16.dp),
+                        color = Color(0xFF856404),
+                        fontSize = 12.sp
+                    )
+                }
             }
 
             SectionTitle("Your Details")
@@ -275,9 +325,6 @@ fun ProductRequestScreen(
                 }
             }
 
-            LabelText("Products *")
-            SimpleDropdown(availableProducts, selectedProduct) { selectedProduct = it }
-
             SectionTitle("Preferred Contact Method")
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 ContactMethodItem("Call", Icons.Default.Phone, callMethod, Modifier.weight(1f)) { callMethod = it }
@@ -307,12 +354,13 @@ fun ProductRequestScreen(
 
             Button(
                 onClick = { 
+                    val finalProduct = if (requestType == "Upgrade") upgradeTargetProduct else selectedProduct
                     viewModel.submitTicket(TicketRequest(
                         userId = userId,
                         name = fullName,
-                        subject = "$requestType: $selectedProduct",
+                        subject = "$requestType: $finalProduct",
                         category = "Product",
-                        description = "Requested $selectedProduct ($requestType). Users: $numUsers, Branches: $numBranches. Contact: " + (if(callMethod) "Call " else "") + (if(whatsappMethod) "Whatsapp" else ""),
+                        description = "Requested $finalProduct ($requestType). License: $selectedLicense. Users: $numUsers, Branches: $numBranches.",
                         mobile = mobileNumber,
                         email = emailAddress,
                         company = companyName,
@@ -322,7 +370,7 @@ fun ProductRequestScreen(
                 modifier = Modifier.fillMaxWidth().height(56.dp), 
                 shape = RoundedCornerShape(12.dp), 
                 colors = ButtonDefaults.buttonColors(containerColor = FssBlue),
-                enabled = submitState !is TicketSubmitState.Loading
+                enabled = submitState !is TicketSubmitState.Loading && !(requestType == "Upgrade" && availableProducts.isEmpty())
             ) {
                 if (submitState is TicketSubmitState.Loading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                 else Text("Submit Product Request", fontWeight = FontWeight.Bold)

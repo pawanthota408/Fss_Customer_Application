@@ -81,7 +81,12 @@ fun SimpleDropdown(options: List<String>, selected: String, onSelect: (String) -
 }
 
 @Composable
-fun LicenseDropdown(licences: List<License>, selected: String, onSelect: (String) -> Unit) {
+fun LicenseDropdown(
+    licences: List<License>,
+    selected: String,
+    showProduct: Boolean = true,
+    onSelect: (String) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
     Box(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -95,8 +100,13 @@ fun LicenseDropdown(licences: List<License>, selected: String, onSelect: (String
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             licences.forEach { licence ->
+                val displayText = if (showProduct) {
+                    "${licence.number} (${licence.productName})"
+                } else {
+                    licence.number
+                }
                 DropdownMenuItem(
-                    text = { Text("${licence.number} (${licence.productName})") },
+                    text = { Text(displayText) },
                     onClick = { onSelect(licence.number); expanded = false }
                 )
             }
