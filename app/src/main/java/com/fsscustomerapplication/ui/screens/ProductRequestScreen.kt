@@ -15,22 +15,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import coil.compose.AsyncImage
 import com.fsscustomerapplication.R
 import com.fsscustomerapplication.data.remote.model.ProductService
+import com.fsscustomerapplication.data.remote.model.TicketRequest
 import com.fsscustomerapplication.ui.components.*
 import com.fsscustomerapplication.ui.theme.FssBlue
 import com.fsscustomerapplication.ui.viewmodels.DashboardState
 import com.fsscustomerapplication.ui.viewmodels.DashboardViewModel
-
-import com.fsscustomerapplication.data.remote.model.TicketRequest
 import com.fsscustomerapplication.ui.viewmodels.TicketSubmitState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,11 +61,21 @@ fun ProductRequestScreen(
         }
     }
 
+    fun getProductTier(productName: String?): Int {
+        val n = productName.orEmpty().lowercase()
+        return when {
+            n.contains("server") -> 3
+            n.contains("gold") -> 2
+            n.contains("silver") -> 1
+            else -> 1
+        }
+    }
+
     val initialProduct = normalizeProductName(item?.displayName())
     var selectedProduct by remember { mutableStateOf(initialProduct) }
     var requestType by remember { mutableStateOf("New License") }
     var selectedLicense by remember { mutableStateOf("") }
-    var upgradeTargetProduct by remember { mutableStateOf("Tally Prime Server") }
+    var upgradeTargetProduct by remember { mutableStateOf("Tally Prime Gold") }
 
     LaunchedEffect(userId) {
         viewModel.fetchDashboardData(userId)
@@ -76,18 +85,16 @@ fun ProductRequestScreen(
     val customer = (uiState as? DashboardState.Success)?.data?.customer
 
     val allProducts = listOf("Tally Prime Silver", "Tally Prime Gold", "Tally Prime Server")
-    
-    // Upgrade available products based on the opened product (selectedProduct)
     val availableProducts = remember(selectedProduct, requestType) {
         if (requestType == "Upgrade") {
             when {
-                selectedProduct.contains("Silver", ignoreCase = true) ->
-                    listOf("Tally Prime Gold", "Tally Prime Server")
-                selectedProduct.contains("Gold", ignoreCase = true) ->
-                    listOf("Tally Prime Server")
                 selectedProduct.contains("Server", ignoreCase = true) ->
-                    emptyList()
-                else -> listOf("Tally Prime Gold", "Tally Prime Server")
+                    listOf("Tally Prime Server")
+                selectedProduct.contains("Gold", ignoreCase = true) ->
+                    listOf("Tally Prime Gold")
+                selectedProduct.contains("Silver", ignoreCase = true) ->
+                    listOf("Tally Prime Gold")
+                else -> listOf("Tally Prime Gold")
             }
         } else {
             allProducts
@@ -106,13 +113,17 @@ fun ProductRequestScreen(
     val context = LocalContext.current
 
     LaunchedEffect(submitState) {
-        if (submitState is TicketSubmitState.Success) {
-            Toast.makeText(context, (submitState as TicketSubmitState.Success).message, Toast.LENGTH_SHORT).show()
-            viewModel.resetTicketSubmitState()
-            onBack()
-        } else if (submitState is TicketSubmitState.Error) {
-            Toast.makeText(context, (submitState as TicketSubmitState.Error).message, Toast.LENGTH_SHORT).show()
-            viewModel.resetTicketSubmitState()
+        when (submitState) {
+            is TicketSubmitState.Success -> {
+                Toast.makeText(context, (submitState as TicketSubmitState.Success).message, Toast.LENGTH_SHORT).show()
+                viewModel.resetTicketSubmitState()
+                onBack()
+            }
+            is TicketSubmitState.Error -> {
+                Toast.makeText(context, (submitState as TicketSubmitState.Error).message, Toast.LENGTH_SHORT).show()
+                viewModel.resetTicketSubmitState()
+            }
+            else -> {}
         }
     }
 
@@ -141,7 +152,9 @@ fun ProductRequestScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.fetchDashboardData(userId) }) { Icon(Icons.Default.Refresh, contentDescription = null) }
+                    IconButton(onClick = { viewModel.fetchDashboardData(userId) }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
@@ -156,13 +169,16 @@ fun ProductRequestScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Product Header (Always displays selectedProduct)
+            // Product Header
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     AsyncImage(
                         model = item?.iconLink,
                         contentDescription = null,
@@ -172,7 +188,11 @@ fun ProductRequestScreen(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text(if (requestType == "Upgrade" && availableProducts.isEmpty()) "Tally Prime Server" else selectedProduct, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text(
+                            text = if (requestType == "Upgrade" && availableProducts.isEmpty()) "Tally Prime Server" else selectedProduct,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
                         Text("100% Secure & Official License", fontSize = 10.sp, color = Color(0xFF138808))
                         Text("Selected product for your business", fontSize = 10.sp, color = Color.Gray)
                     }
@@ -181,7 +201,10 @@ fun ProductRequestScreen(
 
             // Request Type
             SectionTitle("Request Type")
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 FilterChip(
                     selected = requestType == "New License",
                     onClick = { 
@@ -190,7 +213,7 @@ fun ProductRequestScreen(
                     },
                     label = { Text("New License") }
                 )
-                if (licences.isNotEmpty()) {
+                if (licences.isNotEmpty() && !initialProduct.contains("Silver", ignoreCase = true)) {
                     FilterChip(
                         selected = requestType == "Upgrade",
                         onClick = { requestType = "Upgrade" },
@@ -199,14 +222,23 @@ fun ProductRequestScreen(
                 }
             }
 
-            // Select License to Upgrade (Choose License) - Placed at the top right below Request Type when Upgrade
+            // Select License to Upgrade (Choose License)
             if (requestType == "Upgrade") {
                 SectionTitle("Select License to Upgrade")
+                val openedTier = getProductTier(selectedProduct)
                 val tallyLicences = licences.filter { lic ->
                     val pName = lic.productName.orEmpty().lowercase()
-                    pName.contains("tally") || pName.contains("silver") || pName.contains("gold") || pName.contains("server")
+                    val isTally = pName.contains("tally") || pName.contains("silver") || pName.contains("gold") || pName.contains("server")
+                    if (!isTally) return@filter false
+
+                    val licTier = getProductTier(lic.productName)
+                    if (openedTier > 1) {
+                        licTier < openedTier
+                    } else {
+                        true
+                    }
                 }
-                LicenseDropdown(tallyLicences, selectedLicense, showProduct = false) { 
+                LicenseDropdown(tallyLicences, selectedLicense, showProduct = true) { 
                     selectedLicense = it 
                 }
             }
@@ -222,7 +254,7 @@ fun ProductRequestScreen(
                         else selectedProduct = it 
                     }
                 )
-            } else if (availableProducts.isEmpty()) {
+            } else if (requestType == "Upgrade" && availableProducts.isEmpty()) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD))
@@ -236,31 +268,48 @@ fun ProductRequestScreen(
                 }
             }
 
+            // Your Details
             SectionTitle("Your Details")
-            
+
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column {
                     LabelText("Full Name *")
                     OutlinedTextField(
-                        value = fullName, 
-                        onValueChange = { fullName = it }, 
-                        placeholder = { Text("Enter Name", fontSize = 12.sp) }, 
-                        leadingIcon = { Icon(Icons.Default.Person, null, modifier = Modifier.size(18.dp)) },
-                        trailingIcon = { if(fullName.isNotEmpty()) IconButton(onClick = { fullName = "" }) { Icon(Icons.Default.Clear, null, modifier = Modifier.size(16.dp)) } },
+                        value = fullName,
+                        onValueChange = { fullName = it },
+                        placeholder = { Text("Enter Name", fontSize = 12.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp))
+                        },
+                        trailingIcon = {
+                            if (fullName.isNotEmpty()) {
+                                IconButton(onClick = { fullName = "" }) {
+                                    Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
                 }
-                
+
                 Column {
                     LabelText("Mobile Number *")
                     OutlinedTextField(
-                        value = mobileNumber, 
-                        onValueChange = { mobileNumber = it }, 
-                        placeholder = { Text("Mobile", fontSize = 12.sp) }, 
-                        leadingIcon = { Icon(Icons.Default.Phone, null, modifier = Modifier.size(18.dp)) },
-                        trailingIcon = { if(mobileNumber.isNotEmpty()) IconButton(onClick = { mobileNumber = "" }) { Icon(Icons.Default.Clear, null, modifier = Modifier.size(16.dp)) } },
+                        value = mobileNumber,
+                        onValueChange = { mobileNumber = it },
+                        placeholder = { Text("Mobile", fontSize = 12.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(18.dp))
+                        },
+                        trailingIcon = {
+                            if (mobileNumber.isNotEmpty()) {
+                                IconButton(onClick = { mobileNumber = "" }) {
+                                    Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -270,43 +319,68 @@ fun ProductRequestScreen(
                 Column {
                     LabelText("Email Address *")
                     OutlinedTextField(
-                        value = emailAddress, 
-                        onValueChange = { emailAddress = it }, 
-                        modifier = Modifier.fillMaxWidth(), 
-                        placeholder = { Text("Enter email", fontSize = 12.sp) }, 
-                        leadingIcon = { Icon(Icons.Default.Email, null, modifier = Modifier.size(18.dp)) },
-                        trailingIcon = { if(emailAddress.isNotEmpty()) IconButton(onClick = { emailAddress = "" }) { Icon(Icons.Default.Clear, null, modifier = Modifier.size(16.dp)) } },
+                        value = emailAddress,
+                        onValueChange = { emailAddress = it },
+                        placeholder = { Text("Email", fontSize = 12.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
+                        },
+                        trailingIcon = {
+                            if (emailAddress.isNotEmpty()) {
+                                IconButton(onClick = { emailAddress = "" }) {
+                                    Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
                         singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
                 }
             }
 
+            // Company Details
             SectionTitle("Company Details")
-            
+
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column {
                     LabelText("Company Name *")
                     OutlinedTextField(
-                        value = companyName, 
-                        onValueChange = { companyName = it }, 
-                        placeholder = { Text("Company", fontSize = 12.sp) }, 
-                        leadingIcon = { Icon(Icons.Default.Business, null, modifier = Modifier.size(18.dp)) },
-                        trailingIcon = { if(companyName.isNotEmpty()) IconButton(onClick = { companyName = "" }) { Icon(Icons.Default.Clear, null, modifier = Modifier.size(16.dp)) } },
+                        value = companyName,
+                        onValueChange = { companyName = it },
+                        placeholder = { Text("Company", fontSize = 12.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Default.Business, contentDescription = null, modifier = Modifier.size(18.dp))
+                        },
+                        trailingIcon = {
+                            if (companyName.isNotEmpty()) {
+                                IconButton(onClick = { companyName = "" }) {
+                                    Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
                 }
-                
+
                 Column {
                     LabelText("Number of users *")
                     OutlinedTextField(
-                        value = numUsers, 
-                        onValueChange = { numUsers = it }, 
-                        placeholder = { Text("Users", fontSize = 12.sp) }, 
-                        leadingIcon = { Icon(Icons.Default.Group, null, modifier = Modifier.size(18.dp)) },
-                        trailingIcon = { if(numUsers.isNotEmpty()) IconButton(onClick = { numUsers = "" }) { Icon(Icons.Default.Clear, null, modifier = Modifier.size(16.dp)) } },
+                        value = numUsers,
+                        onValueChange = { numUsers = it },
+                        placeholder = { Text("Users", fontSize = 12.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(18.dp))
+                        },
+                        trailingIcon = {
+                            if (numUsers.isNotEmpty()) {
+                                IconButton(onClick = { numUsers = "" }) {
+                                    Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -314,7 +388,10 @@ fun ProductRequestScreen(
                 }
             }
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Column(modifier = Modifier.weight(1f)) {
                     LabelText("No.of Branches *")
                     SimpleDropdown(listOf("1", "5", "10", "20+"), numBranches) { numBranches = it }
@@ -325,19 +402,51 @@ fun ProductRequestScreen(
                 }
             }
 
+            // Preferred Contact Method
             SectionTitle("Preferred Contact Method")
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                ContactMethodItem("Call", Icons.Default.Phone, callMethod, Modifier.weight(1f)) { callMethod = it }
-                ContactMethodItem("Whatsapp", Icons.AutoMirrored.Filled.Message, whatsappMethod, Modifier.weight(1f)) { whatsappMethod = it }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                ContactMethodItem(
+                    label = "Call",
+                    icon = Icons.Default.Phone,
+                    isChecked = callMethod,
+                    modifier = Modifier.weight(1f),
+                    onCheckedChange = { callMethod = it }
+                )
+                ContactMethodItem(
+                    label = "Whatsapp",
+                    icon = Icons.AutoMirrored.Filled.Message,
+                    isChecked = whatsappMethod,
+                    modifier = Modifier.weight(1f),
+                    onCheckedChange = { whatsappMethod = it }
+                )
             }
 
-            // Why FSS card
-            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFE8EFFF))) {
-                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Verified, null, tint = Color(0xFF138808), modifier = Modifier.size(32.dp))
+            // Why FSS is Best card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFE8EFFF))
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Verified,
+                        contentDescription = null,
+                        tint = Color(0xFF138808),
+                        modifier = Modifier.size(32.dp)
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text("Why FSS is Best?", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text(
+                            text = "Why FSS is Best?",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
                         Row(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.weight(1f)) {
                                 BenefitItem("Official Tally Partner")
@@ -352,29 +461,44 @@ fun ProductRequestScreen(
                 }
             }
 
+            // Submit Button
             Button(
                 onClick = { 
                     val finalProduct = if (requestType == "Upgrade") upgradeTargetProduct else selectedProduct
-                    viewModel.submitTicket(TicketRequest(
-                        userId = userId,
-                        name = fullName,
-                        subject = "$requestType: $finalProduct",
-                        category = "Product",
-                        description = "Requested $finalProduct ($requestType). License: $selectedLicense. Users: $numUsers, Branches: $numBranches.",
-                        mobile = mobileNumber,
-                        email = emailAddress,
-                        company = companyName,
-                        licenseNo = if(requestType == "Upgrade") selectedLicense else null
-                    ))
-                }, 
-                modifier = Modifier.fillMaxWidth().height(56.dp), 
-                shape = RoundedCornerShape(12.dp), 
+                    viewModel.submitTicket(
+                        TicketRequest(
+                            userId = userId,
+                            name = fullName.trim(),
+                            subject = "$requestType: $finalProduct",
+                            category = "Product",
+                            description = "Requested $finalProduct ($requestType). License: $selectedLicense. Users: $numUsers, Branches: $numBranches.",
+                            mobile = mobileNumber.trim(),
+                            email = emailAddress.trim(),
+                            company = companyName.trim(),
+                            licenseNo = if (requestType == "Upgrade") selectedLicense else null
+                        )
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = FssBlue),
                 enabled = submitState !is TicketSubmitState.Loading && !(requestType == "Upgrade" && availableProducts.isEmpty())
             ) {
-                if (submitState is TicketSubmitState.Loading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                else Text("Submit Product Request", fontWeight = FontWeight.Bold)
+                if (submitState is TicketSubmitState.Loading) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                } else {
+                    Text(
+                        text = "Submit Product Request",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
+
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
